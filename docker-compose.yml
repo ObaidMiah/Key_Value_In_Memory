@@ -1,0 +1,30 @@
+# Brings up 3 kvstore nodes on a shared bridge network. Inside the network
+# they address each other as node1/node2/node3 on port 50051; from the host
+# they map to 50051/50052/50053.
+
+x-kvstore-base: &kvstore-base
+  build: .
+  image: kvstore:dev
+  networks: [kvnet]
+
+services:
+  node1:
+    <<: *kvstore-base
+    command: ["--port", "50051", "--node-id", "node1"]
+    ports: ["50051:50051"]
+
+  node2:
+    <<: *kvstore-base
+    command: ["--port", "50051", "--node-id", "node2"]
+    ports: ["50052:50051"]
+    depends_on: [node1]
+
+  node3:
+    <<: *kvstore-base
+    command: ["--port", "50051", "--node-id", "node3"]
+    ports: ["50053:50051"]
+    depends_on: [node1]
+
+networks:
+  kvnet:
+    driver: bridge

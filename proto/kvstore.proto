@@ -1,0 +1,20 @@
+// Placeholder service for the kvstore project. Only a Ping RPC exists today;
+// the real Get/Put/Delete/replication RPCs will be defined as the design
+// evolves.
+
+syntax = "proto3";
+
+package kvstore;
+
+service KvStore {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {
+  string from = 1;
+}
+
+message PingResponse {
+  string node_id = 1;
+  int64 server_time_ms = 2;
+}

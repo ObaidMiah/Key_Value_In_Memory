@@ -1,0 +1,103 @@
+# Verifies the scaffold end-to-end on GitHub-hosted Linux runners:
+#   1. build_and_test  — vcpkg install, cmake build (Debug), ctest, server/client Ping
+#   2. docker_smoke    — docker compose build, bring up the 3-node cluster, Ping each node
+# Both jobs run in parallel on separate runners.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build_and_test:
+    name: Build + ctest + Ping (Ubuntu)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            autoconf automake libtool python3 zip unzip tar curl
+
+      # Reuses compiled vcpkg packages across runs keyed on vcpkg.json content.
+      - name: Cache vcpkg binary archives
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/vcpkg/archives
+          key: vcpkg-archives-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-archives-${{ runner.os }}-
+
+      - name: Bootstrap vcpkg
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git $HOME/vcpkg
+          $HOME/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          echo "VCPKG_ROOT=$HOME/vcpkg" >> $GITHUB_ENV
+
+      - name: Configure CMake (Debug)
+        run: cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build/debug --parallel
+
+      - name: Run ctest
+        run: ctest --test-dir build/debug --output-on-failure
+
+      - name: Smoke test — server + client Ping
+        run: |
+          ./build/debug/src/kvstore_server --port 50051 --node-id ci-node &
+          SERVER_PID=$!
+          # Give the server a moment to bind the port.
+          for i in $(seq 1 10); do
+            if (echo > /dev/tcp/127.0.0.1/50051) 2>/dev/null; then break; fi
+            sleep 1
+          done
+          ./build/debug/src/kvstore_client --target localhost:50051 --from ci-client
+          kill $SERVER_PID
+
+  docker_smoke:
+    name: docker compose 3-node Ping
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build docker images
+        run: docker compose build
+
+      - name: Bring up 3-node cluster
+        run: docker compose up -d
+
+      - name: Wait for nodes to bind
+        run: |
+          for svc in node1 node2 node3; do
+            for i in $(seq 1 30); do
+              if docker compose logs $svc 2>&1 | grep -q "listening on"; then
+                echo "$svc ready"
+                break
+              fi
+              sleep 1
+            done
+          done
+
+      - name: Ping each node from inside the compose network
+        run: |
+          set -e
+          for target in node1 node2 node3; do
+            echo "==> Pinging $target:50051"
+            docker compose exec -T node1 /usr/local/bin/kvstore_client \
+              --target $target:50051 --from ci-smoke
+          done
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
