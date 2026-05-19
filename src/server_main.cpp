@@ -10,6 +10,7 @@
 #include <CLI/CLI.hpp>
 #include <grpcpp/grpcpp.h>
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "kvstore.grpc.pb.h"
 
@@ -47,8 +48,10 @@ int main(int argc, char** argv) {
       ->capture_default_str();
   CLI11_PARSE(app, argc, argv);
 
+  // spdlog logger names are immutable after construction, so swap the
+  // default logger for a freshly-built one named after this node.
+  spdlog::set_default_logger(spdlog::stdout_color_mt(node_id));
   spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%n] %v");
-  spdlog::default_logger()->set_name(node_id);
 
   const std::string address = "0.0.0.0:" + std::to_string(port);
   KvStoreServiceImpl service{node_id};
