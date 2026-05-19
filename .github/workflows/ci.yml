@@ -43,22 +43,30 @@ jobs:
       - name: Configure CMake (Debug)
         run: cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug
 
-      - name: Build
+      - name: Build (Debug)
         run: cmake --build build/debug --parallel
 
-      - name: Run ctest
+      - name: Run ctest (Debug, ASan + UBSan)
         run: ctest --test-dir build/debug --output-on-failure
 
-      - name: Smoke test — server + client Ping
+      - name: Configure CMake (Release)
+        run: cmake -S . -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (Release)
+        run: cmake --build build/release --parallel
+
+      # Smoke test runs against the Release binary on purpose — gRPC's
+      # internal use of alloca trips ASan's stack-redzone checks at channel
+      # creation, which is a known gRPC/ASan interaction unrelated to our code.
+      - name: Smoke test — server + client Ping (Release)
         run: |
-          ./build/debug/src/kvstore_server --port 50051 --node-id ci-node &
+          ./build/release/src/kvstore_server --port 50051 --node-id ci-node &
           SERVER_PID=$!
-          # Give the server a moment to bind the port.
           for i in $(seq 1 10); do
             if (echo > /dev/tcp/127.0.0.1/50051) 2>/dev/null; then break; fi
             sleep 1
           done
-          ./build/debug/src/kvstore_client --target localhost:50051 --from ci-client
+          ./build/release/src/kvstore_client --target localhost:50051 --from ci-client
           kill $SERVER_PID
 
   docker_smoke:
