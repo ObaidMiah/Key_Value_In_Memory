@@ -6,6 +6,7 @@ target_include_directories(kvstore_server PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(kvstore_server PRIVATE
   kvstore_proto
   gRPC::grpc++
+  gRPC::grpc++_reflection
   spdlog::spdlog
   CLI11::CLI11
 )

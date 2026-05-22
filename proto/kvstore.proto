@@ -8,6 +8,10 @@ package kvstore;
 
 service KvStore {
   rpc Ping(PingRequest) returns (PingResponse);
+
+  rpc Get(GetRequest) returns (GetResponse); 
+  rpc Put(PutRequest) returns (PutResponse); 
+  rpc Delete(DeleteRequest) returns (DeleteResponse); 
 }
 
 message PingRequest {
@@ -17,4 +21,30 @@ message PingRequest {
 message PingResponse {
   string node_id = 1;
   int64 server_time_ms = 2;
+}
+
+
+// Lets say it's a simple string to int key value store 
+
+message GetRequest{
+  string key = 1; 
+}
+
+message GetResponse{
+  int32 value = 1; 
+}
+
+message PutRequest{
+  string key = 1; 
+  int32 value = 2; 
+}
+
+message PutResponse{
+}
+
+message DeleteRequest{
+  string key = 1; 
+}
+
+message DeleteResponse{
 }

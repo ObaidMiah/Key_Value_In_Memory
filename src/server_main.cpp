@@ -9,6 +9,7 @@
 
 #include <CLI/CLI.hpp>
 #include <grpcpp/grpcpp.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
@@ -33,6 +34,27 @@ class KvStoreServiceImpl final : public kvstore::KvStore::Service {
     return grpc::Status::OK;
   }
 
+  grpc::Status Get(grpc::ServerContext* /*context*/,
+                    const kvstore::GetRequest* request,
+                    kvstore::GetResponse* response) override {
+    
+    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Get not yet implemented");
+  }
+
+  grpc::Status Put(grpc::ServerContext* /*context*/,
+                    const kvstore::PutRequest* request,
+                    kvstore::PutResponse* response) override {
+    
+    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Put not yet implemented");
+  }
+
+  grpc::Status Delete(grpc::ServerContext* /*context*/,
+                    const kvstore::DeleteRequest* request,
+                    kvstore::DeleteResponse* response) override {
+    
+    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Delete not yet implemented");
+  }
+
  private:
   std::string node_id_;
 };
@@ -55,6 +77,9 @@ int main(int argc, char** argv) {
 
   const std::string address = "0.0.0.0:" + std::to_string(port);
   KvStoreServiceImpl service{node_id};
+
+  // Enable server reflection so grpcurl can discover RPCs without a -proto flag.
+  grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
   grpc::ServerBuilder builder;
   builder.AddListeningPort(address, grpc::InsecureServerCredentials());
