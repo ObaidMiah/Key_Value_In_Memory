@@ -1,7 +1,11 @@
 # Builds the server and client binaries. Both link against the generated
 # proto library plus runtime libraries (grpc++, spdlog, CLI11).
 
-add_executable(kvstore_server server_main.cpp)
+add_executable(kvstore_server
+  server_main.cpp
+  kv_service.cc
+  kv_store.cc
+)
 target_include_directories(kvstore_server PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(kvstore_server PRIVATE
   kvstore_proto
