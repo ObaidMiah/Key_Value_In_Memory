@@ -15,51 +15,8 @@
 
 #include "kvstore.grpc.pb.h"
 
-namespace {
-
-class KvStoreServiceImpl final : public kvstore::KvStore::Service {
- public:
-  explicit KvStoreServiceImpl(std::string node_id)
-      : node_id_(std::move(node_id)) {}
-
-  grpc::Status Ping(grpc::ServerContext* /*context*/,
-                    const kvstore::PingRequest* request,
-                    kvstore::PingResponse* response) override {
-    spdlog::info("Ping received from '{}'", request->from());
-    response->set_node_id(node_id_);
-    response->set_server_time_ms(
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-            .count());
-    return grpc::Status::OK;
-  }
-
-  grpc::Status Get(grpc::ServerContext* /*context*/,
-                    const kvstore::GetRequest* request,
-                    kvstore::GetResponse* response) override {
-    
-    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Get not yet implemented");
-  }
-
-  grpc::Status Put(grpc::ServerContext* /*context*/,
-                    const kvstore::PutRequest* request,
-                    kvstore::PutResponse* response) override {
-    
-    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Put not yet implemented");
-  }
-
-  grpc::Status Delete(grpc::ServerContext* /*context*/,
-                    const kvstore::DeleteRequest* request,
-                    kvstore::DeleteResponse* response) override {
-    
-    return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Delete not yet implemented");
-  }
-
- private:
-  std::string node_id_;
-};
-
-}  // namespace
+#include "kvstore/kv_store.h"
+#include "kv_service.h"
 
 int main(int argc, char** argv) {
   CLI::App app{"kvstore server"};
@@ -76,10 +33,13 @@ int main(int argc, char** argv) {
   spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%n] %v");
 
   const std::string address = "0.0.0.0:" + std::to_string(port);
-  KvStoreServiceImpl service{node_id};
 
   // Enable server reflection so grpcurl can discover RPCs without a -proto flag.
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+
+  kvstore::Database db; 
+  kvstore::KvStoreServiceImpl service{node_id, db};
+
 
   grpc::ServerBuilder builder;
   builder.AddListeningPort(address, grpc::InsecureServerCredentials());

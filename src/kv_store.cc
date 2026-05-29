@@ -33,14 +33,11 @@ namespace kvstore
         return false; // is this correct if it doesn't exist?
     }
 
-    bool Database::putValue(const std::string &key, int32_t val)
+    void Database::putValue(const std::string &key, int32_t val)
     {
         std::lock_guard<std::mutex> lock(mu_);
 
         database_[key] = val;
-        return true;
-
-        // don't know if a false is possible
     }
 
     size_t Database::getSize() const

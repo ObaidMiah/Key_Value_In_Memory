@@ -21,7 +21,7 @@ namespace kvstore
         
         bool getValue(const std::string &key, int32_t &value) const;
         bool deleteValue(const std::string &key);
-        bool putValue(const std::string &key, int32_t val);
+        void putValue(const std::string &key, int32_t val);
         size_t getSize() const;
     };
 } // namespace kvstore
