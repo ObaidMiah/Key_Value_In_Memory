@@ -5,6 +5,8 @@
 
 namespace kvstore
 {
+    Database::Database(std::string wal_path) : wal_path_(std::move(wal_path)) {}
+
     bool Database::getValue(const std::string &key, int32_t &value) const
     {
         std::lock_guard<std::mutex> lock(mu_);

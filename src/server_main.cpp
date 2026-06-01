@@ -22,8 +22,11 @@ int main(int argc, char** argv) {
   CLI::App app{"kvstore server"};
   int port = 50051;
   std::string node_id = "node-0";
+  std::string wal_path = "wal.log";
   app.add_option("--port", port, "TCP port to listen on")->capture_default_str();
   app.add_option("--node-id", node_id, "Unique node identifier")
+      ->capture_default_str();
+  app.add_option("--wal-path", wal_path, "Path to the write-ahead log file")
       ->capture_default_str();
   CLI11_PARSE(app, argc, argv);
 
@@ -37,7 +40,7 @@ int main(int argc, char** argv) {
   // Enable server reflection so grpcurl can discover RPCs without a -proto flag.
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
-  kvstore::Database db; 
+  kvstore::Database db{wal_path};
   kvstore::KvStoreServiceImpl service{node_id, db};
 
 
