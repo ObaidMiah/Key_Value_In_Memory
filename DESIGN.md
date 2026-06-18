@@ -1,6 +1,6 @@
 Start: single node, in-memory hashmap + WAL, gRPC API for get/put/delete.
 
-Eventually: 3-node leader/follower replication with configurable read consistency, then 2-shard partitioning via consistent hashing. Stop there. README explaining tradeoffs, p50/p99 benchmarks.
+Scope: single node done. Next is a concurrency upgrade on the storage layer, then async leader/follower replication, then benchmarks and a README.
 
 ## Progress
 
@@ -30,12 +30,12 @@ v. CI extended with Put/Get/Delete via grpcurl.
 ## WAL
 
 ### what OK means
-OK to a Put means the record is fsynced to disk. Same idea as Postgres with synchronous_commit=on. Costs about 1ms per write on an SSD, so per-client throughput is roughly 1/fsync_latency. fine for v1.
+OK to a Put means the record is fsynced to disk. Same idea as Postgres with synchronous_commit=on. Costs about 1ms per write on an SSD, so per-client throughput is roughly 1/fsync_latency.
 
 ### record format on disk
 [length: 4 bytes][payload bytes][crc32: 4 bytes]
 
-payload is a WalRecord protobuf (op, key, value). length prefix gives framing without needing delimiters or escaping. CRC catches torn writes and bit-rot.
+payload is a WalRecord protobuf (op, key, value). length prefix gives framing without delimiters. CRC catches torn writes and bit-rot.
 
 ### what putValue/deleteValue do, inside mu_
 1. build the WalRecord, append [len][payload][crc] to wal.log
@@ -51,72 +51,56 @@ single mutex around all four steps means WAL byte order is the same as map mutat
 Database's constructor opens wal.log (creates if missing) and walks records from the start:
 - valid CRC -> apply the op to the map
 - bad CRC at EOF -> ftruncate to the offset of that record, stop. expected after a crash mid-write
-- bad CRC mid-file -> currently treated as torn (truncate and stop). design said throw. will revisit, it's lossy as-is
+- bad CRC mid-file -> truncate and stop
 
 Get never touches the WAL.
 
 ### where it lives
-Inside Database. The service handlers don't change. "fsync before mutate" is enforced once, at the only place mutations happen. Any future write path (replication apply, bulk load, etc) goes through the same gate.
+Inside Database. The service handlers don't change. "fsync before mutate" is enforced once, at the only place mutations happen.
 
-### not doing yet
-- segment rotation and compaction
-- group commit (batch records into one fsync)
-- shared_mutex so reads run concurrently with each other
+## Concurrency upgrade (next)
 
-## Replication (Phase 2, designed not built)
+Swap std::mutex for std::shared_mutex on Database. const methods (getValue, getSize) take a shared_lock so reads run concurrently with each other. Writes (putValue, deleteValue) take a unique_lock and stay serialized.
 
-3 nodes total. 1 leader, 2 followers. Going Raft-style for election and log shipping.
+Will benchmark before and after with N concurrent reader threads plus a steady write load. Expect read throughput to scale roughly linearly with cores.
 
-### what OK means now
-Client Puts go to leader. Leader writes to its own WAL, sends to both followers in parallel. As soon as at least 1 follower acks (fsynced), leader replies OK to client. So every acknowledged write is on at least 2 of 3 nodes. Can lose 1 node without losing data.
+## Replication
 
-### picking a leader
-- leader sends heartbeats every ~50ms
-- each follower has a random election timeout between 150 and 300ms
-- if no heartbeat lands by the timeout, follower figures leader is dead and starts an election
+Async leader/follower. 1 leader, 1 follower minimum. Both nodes hard-coded by address in config.
 
-### stopping two leaders at once
-when you start an election you become a candidate and ask the other nodes for votes. each node only votes once per "term" (basically the election round number). need a majority to win. in a 3-node cluster that's 2 votes (your own plus 1 other). two candidates can't both get 2 because there's only 1 other vote available and it goes to one of them. at most 1 leader per term, by the math.
-
-random timeouts mean usually only 1 follower triggers an election at a time so the racing is rare.
-
-### demoting a stale leader
-every Raft message carries the term number. if you receive a message with a higher term than your own, you step down to follower and update your term. so an old leader that gets partitioned away, then reconnects, sees the new leader's term in a heartbeat reply, learns it's been deposed, demotes itself. stops accepting writes.
-
-### protecting committed writes across leader changes
-candidates include (last_log_term, last_log_index) in their vote requests. a follower only votes yes if the candidate is at least as up-to-date as the follower. since every committed write was on at least 2 nodes (option b above), the new leader has to be one of those 2 or it can't get majority. so committed writes always survive elections.
-
-### shipping the log
-leader pushes. for each follower the leader tracks next_index, basically "where i think this follower is in the log." leader sends "here's entry 43, the previous one was entry 42 in term 5." follower checks if it has entry 42 in term 5:
-- yes -> appends entry 43
-- no -> rejects. leader walks next_index back, retries with an earlier entry, repeats until they find common ground. then streams forward from there.
-
-catchup uses the exact same mechanism. nothing special.
+### write path
+- client Puts hit the leader
+- leader runs its existing WAL + fsync + map update + returns OK to client
+- in the background, leader streams new WAL entries to the follower over gRPC
+- follower deserializes each entry and applies it to its own in-memory map
 
 ### reads
-per-request flag. client decides per call:
-- fresh -> read from leader. linearizable, but everything bottlenecks on leader
-- lax -> read from any node. scales, but might see a stale value
+Per-request flag. Client picks per call:
+- fresh -> read from leader. always current.
+- lax -> read from either node. follower may be a few ms behind.
 
-same pattern Cassandra, MongoDB, DynamoDB, etcd all use.
+### tradeoffs
+- OK means leader durability only. follower might be a few ms behind the leader.
+- follower can lag, so lax reads can return slightly stale values.
+- leader is configured statically. if it dies, the cluster is read-only until someone restarts it.
 
-### what has to be on disk for Raft to be safe
-three things, all fsynced before responding to any Raft RPC:
-- current_term (the term number you've seen so far)
-- voted_for (who, if anyone, you voted for in current_term)
-- log entries (already on disk via the WAL)
+## Benchmarks
 
-if any of these get lost on a crash you could vote twice in the same term, which means two candidates could both reach majority, which is split brain. probably a small metadata file next to wal.log, or extend the WAL records to carry term/votedFor too.
+What to measure:
+- Put throughput, single client and N concurrent clients
+- Get throughput, single client and N concurrent clients
+- Put p50 / p99 latency
+- Get p50 / p99 latency
+- Read throughput before vs after the shared_mutex upgrade
+- Read throughput single-node vs 2-node replicated (lax reads split across nodes)
 
-### not doing in v1
-- dynamic cluster membership (joining/leaving at runtime). static config of node addresses for now.
-- batched shipping (multiple entries per RPC)
-- snapshots for fast follower catchup when the log gets huge
+Tool: small C++ load generator using the existing gRPC client. Run against Release builds. Numbers go in the README.
 
-## Phase 3
+## README
 
-2-shard partitioning via consistent hashing. Each shard is its own replicated 3-node group.
-
-## Phase 4
-
-README explaining tradeoffs, p50/p99 benchmarks.
+Final piece. Covers:
+- what the project does
+- architecture diagram
+- design decisions and tradeoffs (link to this file for full detail)
+- benchmark numbers
+- how to build and run locally

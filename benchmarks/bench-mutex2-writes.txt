@@ -1,0 +1,16 @@
+[2026-06-18 12:38:05.232] [info] [bench] starting bench: 8 threads x 5000 ops, read pct 0
+
+================ bench results ================
+Target:         localhost:50051
+Threads:        8
+Ops/thread:     5000
+Total ops:      40000
+Read %:         0
+Key space:      1000
+Duration:       1.79705 s
+Throughput:     22258 ops/sec
+Latency p50:    352.708 us
+Latency p99:    773.333 us
+Latency p999:   1028.5 us
+Errors:         0
+===============================================

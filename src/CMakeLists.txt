@@ -23,3 +23,13 @@ target_link_libraries(kvstore_client PRIVATE
   spdlog::spdlog
   CLI11::CLI11
 )
+
+# Concurrent load generator. Same libs as the client, plus pthreads.
+add_executable(kvstore_bench bench_main.cpp)
+target_include_directories(kvstore_bench PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(kvstore_bench PRIVATE
+  kvstore_proto
+  gRPC::grpc++
+  spdlog::spdlog
+  CLI11::CLI11
+)

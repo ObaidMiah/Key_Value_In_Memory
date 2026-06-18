@@ -1,0 +1,17 @@
+[2026-06-18 12:29:55.132] [info] [bench] prefilling 1000 keys at localhost:50051
+[2026-06-18 12:29:55.226] [info] [bench] starting bench: 16 threads x 20000 ops, read pct 90
+
+================ bench results ================
+Target:         localhost:50051
+Threads:        16
+Ops/thread:     20000
+Total ops:      320000
+Read %:         90
+Key space:      1000
+Duration:       6.87429 s
+Throughput:     46550 ops/sec
+Latency p50:    327.458 us
+Latency p99:    545.5 us
+Latency p999:   891.084 us
+Errors:         0
+===============================================
