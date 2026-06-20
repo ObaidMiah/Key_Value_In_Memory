@@ -18,7 +18,8 @@
 #include "kvstore/kv_store.h"
 #include "kv_service.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
   CLI::App app{"kvstore server"};
   int port = 50051;
   std::string node_id = "node-0";
@@ -40,16 +41,16 @@ int main(int argc, char** argv) {
   // Enable server reflection so grpcurl can discover RPCs without a -proto flag.
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
 
-  kvstore::Database db{wal_path};
+  kvstore::Database db(wal_path);
   kvstore::KvStoreServiceImpl service{node_id, db};
-
 
   grpc::ServerBuilder builder;
   builder.AddListeningPort(address, grpc::InsecureServerCredentials());
   builder.RegisterService(&service);
 
   std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-  if (!server) {
+  if (!server)
+  {
     spdlog::error("Failed to bind {}", address);
     return 1;
   }

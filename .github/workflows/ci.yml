@@ -69,6 +69,51 @@ jobs:
           ./build/release/src/kvstore_client --target localhost:50051 --from ci-client
           kill $SERVER_PID
 
+      - name: Install grpcurl
+        run: |
+          curl -sSL https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz \
+            | sudo tar xz -C /usr/local/bin grpcurl
+          grpcurl -version
+
+      - name: Smoke test — Put / Get / Delete via grpcurl (Release)
+        run: |
+          rm -f /tmp/ci-wal.log
+          ./build/release/src/kvstore_server --port 50052 --node-id ci-node-kv \
+            --wal-path /tmp/ci-wal.log &
+          SERVER_PID=$!
+          for i in $(seq 1 10); do
+            if (echo > /dev/tcp/127.0.0.1/50052) 2>/dev/null; then break; fi
+            sleep 1
+          done
+
+          set -e
+          trap 'kill $SERVER_PID 2>/dev/null || true; rm -f /tmp/ci-wal.log' EXIT
+
+          echo "==> Put foo=42"
+          grpcurl -plaintext -d '{"key":"foo","value":42}' \
+            localhost:50052 kvstore.KvStore/Put
+
+          echo "==> Get foo (expect 42)"
+          OUT=$(grpcurl -plaintext -d '{"key":"foo"}' \
+            localhost:50052 kvstore.KvStore/Get)
+          echo "$OUT"
+          echo "$OUT" | grep -q '"value": *42' \
+            || { echo "Get returned wrong value: $OUT"; exit 1; }
+
+          echo "==> Delete foo"
+          grpcurl -plaintext -d '{"key":"foo"}' \
+            localhost:50052 kvstore.KvStore/Delete
+
+          echo "==> Get foo (expect NOT_FOUND)"
+          if grpcurl -plaintext -d '{"key":"foo"}' \
+              localhost:50052 kvstore.KvStore/Get 2>&1 \
+              | grep -q -i 'NotFound\|NOT_FOUND'; then
+            echo "Got NOT_FOUND as expected"
+          else
+            echo "Expected NOT_FOUND after Delete"
+            exit 1
+          fi
+
   docker_smoke:
     name: docker compose 3-node Ping
     runs-on: ubuntu-24.04

@@ -48,3 +48,14 @@ message DeleteRequest{
 
 message DeleteResponse{
 }
+
+message WalRecord{
+  enum Op{
+    OP_UNSPECIFIED = 0; 
+    OP_PUT = 1; 
+    OP_DELETE = 2; 
+  }
+  Op operation = 1; 
+  string key = 2; 
+  optional int32 value = 3; 
+}

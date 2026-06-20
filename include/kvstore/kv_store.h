@@ -16,10 +16,12 @@ namespace kvstore
     private:
         std::unordered_map<std::string, int32_t> database_;
         mutable std::mutex mu_;
-        std::string wal_path_;
+        std::string wal_log_path_; 
+        int fd_; 
 
     public:
-        explicit Database(std::string wal_path);
+        explicit Database(std::string wal_path); 
+        ~Database() noexcept;
 
         bool getValue(const std::string &key, int32_t &value) const;
         bool deleteValue(const std::string &key);
