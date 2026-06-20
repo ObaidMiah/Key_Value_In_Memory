@@ -1,7 +1,6 @@
 // Entry point for the kvstore gRPC server. Parses --port and --node-id,
 // registers a placeholder KvStore service exposing Ping, and starts a
-// synchronous gRPC server. Real KV logic will live in separate translation
-// units once it exists.
+// synchronous gRPC server.
 
 #include <algorithm>
 #include <chrono>

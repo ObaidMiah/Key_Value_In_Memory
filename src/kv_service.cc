@@ -22,8 +22,8 @@ namespace kvstore
         {
             replication_thread_ = std::thread(&KvStoreServiceImpl::replicationLoop, this);
         }
-        spdlog::info("ctor: role={} followers={} thread_spawned={}",
-                     role_, follower_stubs_.size(), replication_thread_.joinable());
+        spdlog::debug("ctor: role={} followers={} thread_spawned={}",
+                      role_, follower_stubs_.size(), replication_thread_.joinable());
     }
 
     KvStoreServiceImpl::~KvStoreServiceImpl()
@@ -76,7 +76,7 @@ namespace kvstore
                                          const kvstore::PutRequest *request,
                                          kvstore::PutResponse *response)
     {
-        spdlog::info("Put called, role={}", role_); // ADD THIS LINE
+        spdlog::debug("Put called, role={}", role_);
 
         if (role_ == "follower")
         {
@@ -88,7 +88,7 @@ namespace kvstore
 
         if (role_ == "leader")
         {
-            spdlog::info("put: enqueuing key={}", request->key());
+            spdlog::debug("put: enqueuing key={}", request->key());
 
             kvstore::WalRecord record;
             record.set_operation(kvstore::WalRecord::OP_PUT);
@@ -147,7 +147,7 @@ namespace kvstore
 
     void KvStoreServiceImpl::replicationLoop()
     {
-        spdlog::info("replication loop started");
+        spdlog::debug("replication loop started");
 
         while (true)
         {
@@ -183,7 +183,7 @@ namespace kvstore
                 }
                 else
                 {
-                    spdlog::info("replicate ok");
+                    spdlog::debug("replicate ok");
                 }
             }
         }

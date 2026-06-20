@@ -171,7 +171,7 @@ namespace kvstore
             return true;
         }
 
-        return false; // is this correct if it doesn't exist?
+        return false;
     }
 
     void Database::putValue(const std::string &key, int32_t val)
