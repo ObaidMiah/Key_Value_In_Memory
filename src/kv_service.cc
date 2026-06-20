@@ -22,6 +22,8 @@ namespace kvstore
         {
             replication_thread_ = std::thread(&KvStoreServiceImpl::replicationLoop, this);
         }
+        spdlog::info("ctor: role={} followers={} thread_spawned={}",
+                     role_, follower_stubs_.size(), replication_thread_.joinable());
     }
 
     KvStoreServiceImpl::~KvStoreServiceImpl()
@@ -55,6 +57,10 @@ namespace kvstore
                                          const kvstore::GetRequest *request,
                                          kvstore::GetResponse *response)
     {
+        if (role_ == "follower" && request->require_fresh())
+        {
+            return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "Invalid request to follower might return stale data");
+        }
         int32_t value;
 
         if (db_.getValue(request->key(), value))
@@ -70,13 +76,20 @@ namespace kvstore
                                          const kvstore::PutRequest *request,
                                          kvstore::PutResponse *response)
     {
+        spdlog::info("Put called, role={}", role_); // ADD THIS LINE
 
+        if (role_ == "follower")
+        {
+            return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "Invalid request to follower");
+        }
         int32_t value = request->value();
 
         db_.putValue(request->key(), value);
 
         if (role_ == "leader")
         {
+            spdlog::info("put: enqueuing key={}", request->key());
+
             kvstore::WalRecord record;
             record.set_operation(kvstore::WalRecord::OP_PUT);
             record.set_key(request->key());
@@ -91,6 +104,10 @@ namespace kvstore
                                             const kvstore::DeleteRequest *request,
                                             kvstore::DeleteResponse *response)
     {
+        if (role_ == "follower")
+        {
+            return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "Invalid request to follower");
+        }
         if (db_.deleteValue(request->key()))
         {
             if (role_ == "leader")
@@ -110,7 +127,7 @@ namespace kvstore
                                                const kvstore::ReplicateRequest *request,
                                                kvstore::ReplicateResponse *response)
     {
-         const auto& record = request->record();
+        const auto &record = request->record();
 
         switch (record.operation())
         {
@@ -130,6 +147,8 @@ namespace kvstore
 
     void KvStoreServiceImpl::replicationLoop()
     {
+        spdlog::info("replication loop started");
+
         while (true)
         {
             kvstore::WalRecord record;
@@ -161,6 +180,10 @@ namespace kvstore
                 if (!status.ok())
                 {
                     spdlog::warn("replicate failed: {}", status.error_message());
+                }
+                else
+                {
+                    spdlog::info("replicate ok");
                 }
             }
         }

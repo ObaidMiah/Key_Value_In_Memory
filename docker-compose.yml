@@ -1,6 +1,6 @@
-# Brings up 3 kvstore nodes on a shared bridge network. Inside the network
-# they address each other as node1/node2/node3 on port 50051; from the host
-# they map to 50051/50052/50053.
+# Brings up a 2-node leader/follower cluster on a shared bridge network.
+# Inside the network the nodes address each other as leader/follower on
+# port 50051; from the host they map to 50051 (leader) and 50052 (follower).
 
 x-kvstore-base: &kvstore-base
   build: .
@@ -8,22 +8,32 @@ x-kvstore-base: &kvstore-base
   networks: [kvnet]
 
 services:
-  node1:
+  follower:
     <<: *kvstore-base
-    command: ["--port", "50051", "--node-id", "node1"]
-    ports: ["50051:50051"]
-
-  node2:
-    <<: *kvstore-base
-    command: ["--port", "50051", "--node-id", "node2"]
+    command:
+      - "--port"
+      - "50051"
+      - "--node-id"
+      - "follower"
+      - "--role"
+      - "follower"
+      - "--leader-target"
+      - "leader:50051"
     ports: ["50052:50051"]
-    depends_on: [node1]
 
-  node3:
+  leader:
     <<: *kvstore-base
-    command: ["--port", "50051", "--node-id", "node3"]
-    ports: ["50053:50051"]
-    depends_on: [node1]
+    command:
+      - "--port"
+      - "50051"
+      - "--node-id"
+      - "leader"
+      - "--role"
+      - "leader"
+      - "--follower-targets"
+      - "follower:50051"
+    ports: ["50051:50051"]
+    depends_on: [follower]
 
 networks:
   kvnet:
